@@ -35,7 +35,7 @@ export function ThemeToggle() {
       size="icon"
       onClick={toggleTheme}
       className="h-8 w-8"
-      aria-label="Переключить тему"
+      aria-label="Toggle theme"
     >
       {isDark ? (
         <Sun className="h-4 w-4" />

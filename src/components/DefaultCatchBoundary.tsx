@@ -29,11 +29,11 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     <div className="flex items-center justify-center min-h-[50vh]">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="text-destructive">Что-то пошло не так</CardTitle>
+          <CardTitle className="text-destructive">Something went wrong</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
-            <AlertTitle>Ошибка</AlertTitle>
+            <AlertTitle>Error</AlertTitle>
             <AlertDescription className="mt-2">
               <ErrorComponent error={error} />
             </AlertDescription>
@@ -46,18 +46,18 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
               router.invalidate()
             }}
           >
-            Попробовать снова
+            Try Again
           </Button>
           {isRoot ? (
             <Button variant="outline" asChild>
-              <Link to="/">На главную</Link>
+              <Link to="/">Home</Link>
             </Button>
           ) : (
             <Button
               variant="outline"
               onClick={() => window.history.back()}
             >
-              Назад
+              Go Back
             </Button>
           )}
         </CardFooter>

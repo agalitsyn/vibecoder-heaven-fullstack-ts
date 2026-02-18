@@ -16,15 +16,15 @@ export function NotFound({ children }: { children?: any }) {
         <CardHeader>
           <CardTitle className="text-4xl font-bold">404</CardTitle>
           <CardDescription className="text-lg">
-            {children || 'Страница, которую вы ищете, не существует.'}
+            {children || 'The page you are looking for does not exist.'}
           </CardDescription>
         </CardHeader>
         <CardFooter className="flex justify-center gap-2">
           <Button variant="outline" onClick={() => window.history.back()}>
-            Назад
+            Go Back
           </Button>
           <Button asChild>
-            <Link to="/">На главную</Link>
+            <Link to="/">Home</Link>
           </Button>
         </CardFooter>
       </Card>

@@ -1,87 +1,50 @@
-import { redirect, createFileRoute } from '@tanstack/react-router'
-import { createServerFn, useServerFn } from '@tanstack/react-start'
-import { db, users, hashPassword } from '~/db'
-import { eq } from 'drizzle-orm'
-import { useMutation } from '~/hooks/useMutation'
+import { useState } from 'react'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { authClient } from '~/lib/auth-client'
 import { Auth } from '~/components/Auth'
-import { useAppSession } from '~/utils/session'
-
-export const signupFn = createServerFn({ method: 'POST' })
-  .inputValidator(
-    (d: { email: string; password: string; redirectUrl?: string }) => d,
-  )
-  .handler(async ({ data }) => {
-    const found = await db.query.users.findFirst({
-      where: eq(users.email, data.email),
-    })
-
-    const password = await hashPassword(data.password)
-
-    const session = await useAppSession()
-
-    if (found) {
-      if (found.password !== password) {
-        return {
-          error: true,
-          userExists: true,
-          message: 'User already exists',
-        }
-      }
-
-      await session.update({
-        userId: found.id,
-      })
-
-      throw redirect({
-        href: data.redirectUrl || '/documents',
-      })
-    }
-
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: data.email,
-        password,
-      })
-      .returning()
-
-    await session.update({
-      userId: user.id,
-    })
-
-    throw redirect({
-      href: data.redirectUrl || '/documents',
-    })
-  })
 
 export const Route = createFileRoute('/signup')({
   component: SignupComp,
 })
 
 function SignupComp() {
-  const signupMutation = useMutation({
-    fn: useServerFn(signupFn),
-  })
+  const router = useRouter()
+  const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSignup(e: React.FormEvent<HTMLFormElement>) {
+    const formData = new FormData(e.target as HTMLFormElement)
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+
+    setStatus('pending')
+    setError(null)
+
+    const { error: authError } = await authClient.signUp.email({
+      email,
+      password,
+      name: email.split('@')[0],
+    })
+
+    if (authError) {
+      setStatus('error')
+      setError(authError.message || 'Sign up failed')
+      return
+    }
+
+    setStatus('success')
+    await router.invalidate()
+    router.navigate({ to: '/documents' })
+  }
 
   return (
     <Auth
       actionText="Sign Up"
-      status={signupMutation.status}
-      onSubmit={(e) => {
-        const formData = new FormData(e.target as HTMLFormElement)
-
-        signupMutation.mutate({
-          data: {
-            email: formData.get('email') as string,
-            password: formData.get('password') as string,
-          },
-        })
-      }}
+      status={status}
+      onSubmit={handleSignup}
       afterSubmit={
-        signupMutation.data?.error ? (
-          <>
-            <div className="text-red-400">{signupMutation.data.message}</div>
-          </>
+        error ? (
+          <div className="text-red-400">{error}</div>
         ) : null
       }
     />

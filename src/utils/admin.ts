@@ -1,30 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { eq, desc } from 'drizzle-orm'
-import { db, users, userApiKeys, documents } from '~/db'
-import { useAppSession } from './session'
-import { hashPassword } from '~/db'
+import { db, user, apikey, documents } from '~/db'
+import { requireAdmin } from '~/lib/auth-helpers'
+import { auth } from '~/lib/auth'
 import { deleteFile } from './s3'
-
-async function requireAdmin(): Promise<string> {
-  const session = await useAppSession()
-  const userId = session.data.userId
-
-  if (!userId) {
-    throw new Error('Not authenticated')
-  }
-
-  const user = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-
-  if (user.length === 0 || user[0].role !== 'ADMIN') {
-    throw new Error('Admin access required')
-  }
-
-  return userId
-}
 
 // Users CRUD
 export const fetchAllUsers = createServerFn({ method: 'GET' }).handler(async () => {
@@ -32,13 +11,15 @@ export const fetchAllUsers = createServerFn({ method: 'GET' }).handler(async () 
 
   return db
     .select({
-      id: users.id,
-      email: users.email,
-      role: users.role,
-      createdAt: users.createdAt,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      banned: user.banned,
+      createdAt: user.createdAt,
     })
-    .from(users)
-    .orderBy(desc(users.createdAt))
+    .from(user)
+    .orderBy(desc(user.createdAt))
 })
 
 export const fetchUserById = createServerFn({ method: 'GET' })
@@ -46,63 +27,66 @@ export const fetchUserById = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     await requireAdmin()
 
-    const user = await db
+    const result = await db
       .select({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        createdAt: users.createdAt,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        banned: user.banned,
+        createdAt: user.createdAt,
       })
-      .from(users)
-      .where(eq(users.id, data.userId))
+      .from(user)
+      .where(eq(user.id, data.userId))
       .limit(1)
 
-    if (user.length === 0) {
+    if (result.length === 0) {
       throw new Error('User not found')
     }
-
-    return user[0]
-  })
-
-export const adminCreateUser = createServerFn({ method: 'POST' })
-  .inputValidator(
-    (input: { email: string; password: string; role: 'USER' | 'ADMIN' }) => input
-  )
-  .handler(async ({ data }) => {
-    await requireAdmin()
-
-    const existing = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, data.email))
-      .limit(1)
-
-    if (existing.length > 0) {
-      throw new Error('User with this email already exists')
-    }
-
-    const hashedPassword = await hashPassword(data.password)
-
-    const result = await db
-      .insert(users)
-      .values({
-        email: data.email,
-        password: hashedPassword,
-        role: data.role,
-      })
-      .returning({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        createdAt: users.createdAt,
-      })
 
     return result[0]
   })
 
+export const adminCreateUser = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { email: string; password: string; role: 'user' | 'admin'; name?: string }) => input
+  )
+  .handler(async ({ data }) => {
+    await requireAdmin()
+
+    // Use Better Auth API to create user (handles password hashing)
+    const newUser = await auth.api.signUpEmail({
+      body: {
+        email: data.email,
+        password: data.password,
+        name: data.name || data.email.split('@')[0],
+      },
+    })
+
+    if (!newUser?.user) {
+      throw new Error('Failed to create user')
+    }
+
+    // Set role if admin
+    if (data.role === 'admin') {
+      await db
+        .update(user)
+        .set({ role: 'admin' })
+        .where(eq(user.id, newUser.user.id))
+    }
+
+    return {
+      id: newUser.user.id,
+      email: newUser.user.email,
+      name: newUser.user.name,
+      role: data.role,
+      createdAt: newUser.user.createdAt,
+    }
+  })
+
 export const adminUpdateUser = createServerFn({ method: 'POST' })
   .inputValidator(
-    (input: { userId: string; email?: string; role?: 'USER' | 'ADMIN'; password?: string }) =>
+    (input: { userId: string; email?: string; role?: 'user' | 'admin'; password?: string; name?: string }) =>
       input
   )
   .handler(async ({ data }) => {
@@ -110,19 +94,35 @@ export const adminUpdateUser = createServerFn({ method: 'POST' })
 
     const updates: Record<string, unknown> = {}
     if (data.email) updates.email = data.email
+    if (data.name) updates.name = data.name
     if (data.role) updates.role = data.role
-    if (data.password) updates.password = await hashPassword(data.password)
+
+    // Handle password change through Better Auth
+    if (data.password) {
+      await auth.api.setPassword({
+        body: { newPassword: data.password },
+        query: { userId: data.userId },
+      })
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db
+        .update(user)
+        .set(updates)
+        .where(eq(user.id, data.userId))
+    }
 
     const result = await db
-      .update(users)
-      .set(updates)
-      .where(eq(users.id, data.userId))
-      .returning({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        createdAt: users.createdAt,
+      .select({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
       })
+      .from(user)
+      .where(eq(user.id, data.userId))
+      .limit(1)
 
     if (result.length === 0) {
       throw new Error('User not found')
@@ -140,7 +140,7 @@ export const adminDeleteUser = createServerFn({ method: 'POST' })
       throw new Error('Cannot delete your own account')
     }
 
-    await db.delete(users).where(eq(users.id, data.userId))
+    await db.delete(user).where(eq(user.id, data.userId))
 
     return { success: true }
   })
@@ -151,36 +151,27 @@ export const fetchAllApiKeys = createServerFn({ method: 'GET' }).handler(async (
 
   return db
     .select({
-      id: userApiKeys.id,
-      title: userApiKeys.title,
-      prefix: userApiKeys.prefix,
-      createdAt: userApiKeys.createdAt,
-      lastUsedAt: userApiKeys.lastUsedAt,
-      revoked: userApiKeys.revoked,
-      userId: userApiKeys.userId,
-      userEmail: users.email,
+      id: apikey.id,
+      name: apikey.name,
+      prefix: apikey.prefix,
+      start: apikey.start,
+      createdAt: apikey.createdAt,
+      expiresAt: apikey.expiresAt,
+      enabled: apikey.enabled,
+      userId: apikey.userId,
+      userEmail: user.email,
     })
-    .from(userApiKeys)
-    .leftJoin(users, eq(userApiKeys.userId, users.id))
-    .orderBy(desc(userApiKeys.createdAt))
+    .from(apikey)
+    .leftJoin(user, eq(apikey.userId, user.id))
+    .orderBy(desc(apikey.createdAt))
 })
-
-export const adminRevokeApiKey = createServerFn({ method: 'POST' })
-  .inputValidator((input: { keyId: string }) => input)
-  .handler(async ({ data }) => {
-    await requireAdmin()
-
-    await db.update(userApiKeys).set({ revoked: true }).where(eq(userApiKeys.id, data.keyId))
-
-    return { success: true }
-  })
 
 export const adminDeleteApiKey = createServerFn({ method: 'POST' })
   .inputValidator((input: { keyId: string }) => input)
   .handler(async ({ data }) => {
     await requireAdmin()
 
-    await db.delete(userApiKeys).where(eq(userApiKeys.id, data.keyId))
+    await db.delete(apikey).where(eq(apikey.id, data.keyId))
 
     return { success: true }
   })
@@ -199,10 +190,10 @@ export const fetchAllDocuments = createServerFn({ method: 'GET' }).handler(async
       fileKey: documents.fileKey,
       createdAt: documents.createdAt,
       userId: documents.userId,
-      userEmail: users.email,
+      userEmail: user.email,
     })
     .from(documents)
-    .leftJoin(users, eq(documents.userId, users.id))
+    .leftJoin(user, eq(documents.userId, user.id))
     .orderBy(desc(documents.createdAt))
 })
 

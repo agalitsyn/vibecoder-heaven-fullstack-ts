@@ -10,8 +10,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createId } from '@paralleldrive/cuid2'
 
 const S3_ENDPOINT = process.env.S3_ENDPOINT || 'http://localhost:9000'
-const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'minioadmin'
-const S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'minioadmin'
+const S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'accesskey'
+const S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'secretkey'
 const S3_BUCKET = process.env.S3_BUCKET || 'fullstack-ts'
 const S3_REGION = process.env.S3_REGION || 'us-east-1'
 

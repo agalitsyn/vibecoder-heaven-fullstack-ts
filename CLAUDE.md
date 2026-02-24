@@ -18,10 +18,16 @@ Fullstack TypeScript starter template with authentication, file storage (S3), AP
 │   ├── routes/             # File-based routes + API endpoints
 │   │   ├── __root.tsx      # Root layout with nav
 │   │   ├── _authed.tsx     # Auth guard layout
+│   │   ├── api/auth/$.ts   # Better Auth API route handler
 │   │   └── _authed/        # Protected routes
 │   │       ├── documents.* # Document CRUD pages
 │   │       ├── profile.tsx # User profile + API keys
 │   │       └── admin/      # Admin panel (users, keys, docs)
+│   ├── lib/                # Auth configuration
+│   │   ├── auth.ts         # Better Auth server config
+│   │   ├── auth-client.ts  # Better Auth client config
+│   │   ├── auth-session.ts # getSession server function (safe for client import)
+│   │   └── auth-helpers.ts # requireAuth/requireAdmin helpers (server-only)
 │   ├── db/                 # Drizzle ORM schema and seeds
 │   ├── utils/              # Server functions and utilities
 │   └── hooks/              # React hooks
@@ -59,6 +65,7 @@ pnpm db:seed:admin    # Create admin user only
 ### Tech Stack
 - **TanStack Start** (React) — full-stack framework with server functions
 - **TanStack Router** — file-based routing with type-safe navigation
+- **Better Auth** — authentication library with admin & API key plugins
 - **Drizzle ORM** — PostgreSQL database with migrations
 - **Tailwind CSS v4** + **shadcn/ui** — styling and UI components
 - **S3/MinIO** — file storage with presigned URLs
@@ -74,30 +81,37 @@ export const fetchData = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => { /* server code */ })
 ```
 
-**Authentication:**
-1. Session managed via `useAppSession()` in `src/utils/session.ts`
-2. Root route fetches user in `beforeLoad` and passes to context
-3. `_authed.tsx` layout checks `context.user`
-4. Admin routes check `user.role === 'ADMIN'` in `beforeLoad`
+**Authentication (Better Auth):**
+1. Server config in `src/lib/auth.ts` with Drizzle adapter, admin plugin, API key plugin
+2. Client config in `src/lib/auth-client.ts` with `createAuthClient()`
+3. API route handler at `src/routes/api/auth/$.ts` handles all `/api/auth/*` requests
+4. Root route fetches session via `getSession()` in `beforeLoad` and passes `user` to context
+5. `_authed.tsx` layout checks `context.user`
+6. Admin routes check `user.role === 'admin'` in `beforeLoad`
+7. Server functions use `requireAuth()` / `requireAdmin()` from `src/lib/auth-helpers.ts`
 
 **Path Aliases:**
 - `~/` maps to `./src/`
 
-### Database Tables
-- `users` — email, password, role (USER/ADMIN)
-- `documents` — title, file metadata (S3 key, name, type, size), userId
-- `userApiKeys` — hashed keys with prefix, revoke support
+### Database Tables (Better Auth managed)
+- `user` — id, name, email, emailVerified, role, banned, etc.
+- `session` — token-based sessions with expiry
+- `account` — OAuth/credential provider accounts
+- `verification` — email verification tokens
+- `apikey` — API keys with rate limiting support
+- `Document` — title, file metadata (S3 key, name, type, size), userId
 
 ### Environment
 
 Create `.env` in project root (see `.env.example`):
 - `DATABASE_URL` — PostgreSQL connection string
 - `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` — MinIO/S3
-- `SESSION_SECRET` — Session encryption key
+- `BETTER_AUTH_SECRET` — Auth encryption secret (min 32 chars)
+- `BETTER_AUTH_URL` — Base URL for auth (e.g., http://localhost:3000)
 
 ### Test Users (after db:seed)
-- user@example.com / password123 (USER)
-- admin@example.com / password123 (ADMIN)
+- user@example.com / user (user role)
+- admin@example.com / admin (admin role)
 
 ### Testing
 

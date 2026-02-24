@@ -34,22 +34,22 @@ function AdminUsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b">
-                <td className="h-12 px-4 text-sm">{user.email}</td>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b">
+                <td className="h-12 px-4 text-sm">{u.email}</td>
                 <td className="h-12 px-4 text-sm">
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      user.role === 'ADMIN'
+                      u.role === 'admin'
                         ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
                         : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                     }`}
                   >
-                    {user.role}
+                    {u.role}
                   </span>
                 </td>
                 <td className="h-12 px-4 text-sm text-muted-foreground">
-                  {new Date(user.createdAt).toLocaleDateString('en-US', {
+                  {new Date(u.createdAt).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
                     year: 'numeric',
@@ -57,7 +57,7 @@ function AdminUsersPage() {
                 </td>
                 <td className="h-12 px-4 text-right">
                   <Button variant="ghost" size="sm" asChild>
-                    <Link to="/admin/users/$userId" params={{ userId: user.id }}>
+                    <Link to="/admin/users/$userId" params={{ userId: u.id }}>
                       Edit
                     </Link>
                   </Button>

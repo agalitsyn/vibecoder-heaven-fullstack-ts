@@ -4,8 +4,8 @@ import { Users, Key, FileText, LayoutDashboard } from 'lucide-react'
 
 export const Route = createFileRoute('/_authed/admin')({
   beforeLoad: ({ context }) => {
-    const user = context.user as { id: string; email: string; role?: string } | null
-    if (!user || user.role !== 'ADMIN') {
+    const user = context.user as { id: string; email: string; role?: string | null } | null
+    if (!user || user.role !== 'admin') {
       throw new Error('Admin access required')
     }
   },

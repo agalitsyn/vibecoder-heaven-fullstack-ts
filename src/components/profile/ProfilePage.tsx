@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Key, Trash2, Ban, Check, AlertTriangle } from 'lucide-react'
+import { Copy, Key, Trash2, Check, AlertTriangle } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card'
@@ -8,42 +8,42 @@ import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 export type ProfileUser = {
   id: string
   email: string
-  role: 'USER' | 'ADMIN'
+  name: string
+  role: string | null
   createdAt: Date
 }
 
 export type ApiKeyInfo = {
   id: string
-  title: string
-  prefix: string
+  name: string | null
+  prefix: string | null
+  start: string | null
   createdAt: Date
-  lastUsedAt: Date | null
-  revoked: boolean
+  expiresAt: Date | null
+  enabled: boolean
 }
 
 type ProfilePageProps = {
   user: ProfileUser
   apiKeys: ApiKeyInfo[]
-  onCreateKey: (title: string) => Promise<{
+  onCreateKey: (name: string) => Promise<{
     success: boolean
     key?: string
     keyInfo?: ApiKeyInfo
     error?: string
   }>
-  onRevokeKey: (keyId: string) => Promise<{ success: boolean; error?: string }>
   onDeleteKey: (keyId: string) => Promise<{ success: boolean; error?: string }>
 }
 
-const roleLabels: Record<ProfileUser['role'], string> = {
-  USER: 'User',
-  ADMIN: 'Administrator',
+const roleLabels: Record<string, string> = {
+  user: 'User',
+  admin: 'Administrator',
 }
 
 export function ProfilePage({
   user,
   apiKeys,
   onCreateKey,
-  onRevokeKey,
   onDeleteKey,
 }: ProfilePageProps) {
   return (
@@ -66,7 +66,7 @@ export function ProfilePage({
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Role</p>
-              <p className="text-sm">{roleLabels[user.role]}</p>
+              <p className="text-sm">{roleLabels[user.role || 'user'] || user.role}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Registered</p>
@@ -85,7 +85,6 @@ export function ProfilePage({
       <ApiKeysSection
         keys={apiKeys}
         onCreateKey={onCreateKey}
-        onRevokeKey={onRevokeKey}
         onDeleteKey={onDeleteKey}
       />
     </div>
@@ -94,18 +93,17 @@ export function ProfilePage({
 
 type ApiKeysSectionProps = {
   keys: ApiKeyInfo[]
-  onCreateKey: (title: string) => Promise<{
+  onCreateKey: (name: string) => Promise<{
     success: boolean
     key?: string
     keyInfo?: ApiKeyInfo
     error?: string
   }>
-  onRevokeKey: (keyId: string) => Promise<{ success: boolean; error?: string }>
   onDeleteKey: (keyId: string) => Promise<{ success: boolean; error?: string }>
 }
 
-function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeysSectionProps) {
-  const [newKeyTitle, setNewKeyTitle] = useState('')
+function ApiKeysSection({ keys, onCreateKey, onDeleteKey }: ApiKeysSectionProps) {
+  const [newKeyName, setNewKeyName] = useState('')
   const [creating, setCreating] = useState(false)
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null)
   const [copiedKey, setCopiedKey] = useState(false)
@@ -113,15 +111,15 @@ function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeys
 
   async function handleCreateKey(e: React.FormEvent) {
     e.preventDefault()
-    if (!newKeyTitle.trim()) return
+    if (!newKeyName.trim()) return
 
     setCreating(true)
     setError(null)
     try {
-      const result = await onCreateKey(newKeyTitle.trim())
+      const result = await onCreateKey(newKeyName.trim())
       if (result.success && result.key) {
         setNewlyCreatedKey(result.key)
-        setNewKeyTitle('')
+        setNewKeyName('')
       } else {
         setError(result.error || 'Failed to create key')
       }
@@ -129,18 +127,6 @@ function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeys
       setError('Error creating key')
     } finally {
       setCreating(false)
-    }
-  }
-
-  async function handleRevokeKey(keyId: string) {
-    setError(null)
-    try {
-      const result = await onRevokeKey(keyId)
-      if (!result.success) {
-        setError(result.error || 'Failed to revoke key')
-      }
-    } catch {
-      setError('Error revoking key')
     }
   }
 
@@ -225,12 +211,12 @@ function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeys
           <Input
             type="text"
             placeholder="Key name"
-            value={newKeyTitle}
-            onChange={(e) => setNewKeyTitle(e.target.value)}
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
             className="flex-1"
             disabled={creating}
           />
-          <Button type="submit" disabled={creating || !newKeyTitle.trim()}>
+          <Button type="submit" disabled={creating || !newKeyName.trim()}>
             {creating ? 'Creating...' : 'Create Key'}
           </Button>
         </form>
@@ -245,7 +231,6 @@ function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeys
               <ApiKeyRow
                 key={key.id}
                 apiKey={key}
-                onRevoke={() => handleRevokeKey(key.id)}
                 onDelete={() => handleDeleteKey(key.id)}
               />
             ))}
@@ -258,29 +243,32 @@ function ApiKeysSection({ keys, onCreateKey, onRevokeKey, onDeleteKey }: ApiKeys
 
 type ApiKeyRowProps = {
   apiKey: ApiKeyInfo
-  onRevoke: () => void
   onDelete: () => void
 }
 
-function ApiKeyRow({ apiKey, onRevoke, onDelete }: ApiKeyRowProps) {
+function ApiKeyRow({ apiKey, onDelete }: ApiKeyRowProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const displayPrefix = apiKey.start
+    ? `${apiKey.prefix || 'sk'}_${apiKey.start}...`
+    : apiKey.prefix || '-'
 
   return (
     <div
       className={`flex items-center gap-4 p-4 rounded-lg border ${
-        apiKey.revoked ? 'opacity-60 bg-muted' : 'bg-card'
+        !apiKey.enabled ? 'opacity-60 bg-muted' : 'bg-card'
       }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="font-medium truncate">{apiKey.title}</p>
-          {apiKey.revoked && (
+          <p className="font-medium truncate">{apiKey.name || 'Unnamed'}</p>
+          {!apiKey.enabled && (
             <span className="text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 px-2 py-0.5 rounded">
-              Revoked
+              Disabled
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground font-mono">{apiKey.prefix}</p>
+        <p className="text-sm text-muted-foreground font-mono">{displayPrefix}</p>
         <div className="text-xs text-muted-foreground mt-1 space-x-4">
           <span>
             Created:{' '}
@@ -290,10 +278,10 @@ function ApiKeyRow({ apiKey, onRevoke, onDelete }: ApiKeyRowProps) {
               year: 'numeric',
             })}
           </span>
-          {apiKey.lastUsedAt && (
+          {apiKey.expiresAt && (
             <span>
-              Last used:{' '}
-              {new Date(apiKey.lastUsedAt).toLocaleDateString('en-US', {
+              Expires:{' '}
+              {new Date(apiKey.expiresAt).toLocaleDateString('en-US', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric',
@@ -303,11 +291,6 @@ function ApiKeyRow({ apiKey, onRevoke, onDelete }: ApiKeyRowProps) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!apiKey.revoked && (
-          <Button type="button" variant="outline" size="sm" onClick={onRevoke} title="Revoke key">
-            <Ban className="h-4 w-4" />
-          </Button>
-        )}
         {confirmDelete ? (
           <>
             <Button type="button" variant="destructive" size="sm" onClick={onDelete}>

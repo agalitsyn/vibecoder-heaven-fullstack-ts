@@ -18,6 +18,7 @@ import { Route as AuthedProfileRouteImport } from './routes/_authed/profile'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedDocumentsIndexRouteImport } from './routes/_authed/documents.index'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthedDocumentsNewRouteImport } from './routes/_authed/documents.new'
 import { Route as AuthedDocumentsDocumentIdRouteImport } from './routes/_authed/documents.$documentId'
 import { Route as AuthedAdminApiKeysRouteImport } from './routes/_authed/admin/api-keys'
@@ -70,6 +71,11 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedDocumentsNewRoute = AuthedDocumentsNewRouteImport.update({
   id: '/documents/new',
   path: '/documents/new',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/admin/api-keys': typeof AuthedAdminApiKeysRoute
   '/documents/$documentId': typeof AuthedDocumentsDocumentIdRoute
   '/documents/new': typeof AuthedDocumentsNewRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/documents/': typeof AuthedDocumentsIndexRoute
   '/admin/users/$userId': typeof AuthedAdminUsersUserIdRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/admin/api-keys': typeof AuthedAdminApiKeysRoute
   '/documents/$documentId': typeof AuthedDocumentsDocumentIdRoute
   '/documents/new': typeof AuthedDocumentsNewRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/documents': typeof AuthedDocumentsIndexRoute
   '/admin/users/$userId': typeof AuthedAdminUsersUserIdRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/_authed/admin/api-keys': typeof AuthedAdminApiKeysRoute
   '/_authed/documents/$documentId': typeof AuthedDocumentsDocumentIdRoute
   '/_authed/documents/new': typeof AuthedDocumentsNewRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/documents/': typeof AuthedDocumentsIndexRoute
   '/_authed/admin/users/$userId': typeof AuthedAdminUsersUserIdRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/admin/api-keys'
     | '/documents/$documentId'
     | '/documents/new'
+    | '/api/auth/$'
     | '/admin/'
     | '/documents/'
     | '/admin/users/$userId'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/admin/api-keys'
     | '/documents/$documentId'
     | '/documents/new'
+    | '/api/auth/$'
     | '/admin'
     | '/documents'
     | '/admin/users/$userId'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/api-keys'
     | '/_authed/documents/$documentId'
     | '/_authed/documents/new'
+    | '/api/auth/$'
     | '/_authed/admin/'
     | '/_authed/documents/'
     | '/_authed/admin/users/$userId'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
   SignupRoute: typeof SignupRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authed/documents/new': {
       id: '/_authed/documents/new'
@@ -386,6 +406,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
   SignupRoute: SignupRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

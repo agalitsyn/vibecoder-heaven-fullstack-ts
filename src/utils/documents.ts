@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { eq, desc, and } from 'drizzle-orm'
-import { db, documents, users } from '~/db'
-import { useAppSession } from './session'
+import { db, documents, user } from '~/db'
+import { requireAuth } from '~/lib/auth-helpers'
 import {
   buildFileKey,
   getUploadUrl as s3GetUploadUrl,
@@ -13,12 +13,7 @@ import {
 
 export const fetchUserDocuments = createServerFn({ method: 'GET' }).handler(
   async () => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
+    const { userId } = await requireAuth()
 
     return db
       .select()
@@ -31,18 +26,7 @@ export const fetchUserDocuments = createServerFn({ method: 'GET' }).handler(
 export const fetchDocumentById = createServerFn({ method: 'GET' })
   .inputValidator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
-
-    const user = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
+    const { userId, role } = await requireAuth()
 
     const doc = await db
       .select()
@@ -54,7 +38,7 @@ export const fetchDocumentById = createServerFn({ method: 'GET' })
       throw new Error('Document not found')
     }
 
-    if (doc[0].userId !== userId && user[0]?.role !== 'ADMIN') {
+    if (doc[0].userId !== userId && role !== 'admin') {
       throw new Error('Access denied')
     }
 
@@ -64,12 +48,7 @@ export const fetchDocumentById = createServerFn({ method: 'GET' })
 export const createDocument = createServerFn({ method: 'POST' })
   .inputValidator((input: { title: string }) => input)
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
+    const { userId } = await requireAuth()
 
     if (!data.title.trim()) {
       throw new Error('Title is required')
@@ -98,12 +77,7 @@ export const updateDocument = createServerFn({ method: 'POST' })
     }) => input
   )
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
+    const { userId } = await requireAuth()
 
     const doc = await db
       .select()
@@ -134,12 +108,7 @@ export const updateDocument = createServerFn({ method: 'POST' })
 export const deleteDocument = createServerFn({ method: 'POST' })
   .inputValidator((input: { id: string }) => input)
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
+    const { userId } = await requireAuth()
 
     const doc = await db
       .select()
@@ -166,12 +135,7 @@ export const getDocumentUploadUrl = createServerFn({ method: 'POST' })
       input
   )
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
+    const { userId } = await requireAuth()
 
     const doc = await db
       .select()
@@ -200,18 +164,7 @@ export const getDocumentUploadUrl = createServerFn({ method: 'POST' })
 export const getDocumentDownloadUrl = createServerFn({ method: 'GET' })
   .inputValidator((input: { documentId: string }) => input)
   .handler(async ({ data }) => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      throw new Error('Not authenticated')
-    }
-
-    const user = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
+    const { userId, role } = await requireAuth()
 
     const doc = await db
       .select()
@@ -223,7 +176,7 @@ export const getDocumentDownloadUrl = createServerFn({ method: 'GET' })
       throw new Error('Document not found')
     }
 
-    if (doc[0].userId !== userId && user[0]?.role !== 'ADMIN') {
+    if (doc[0].userId !== userId && role !== 'admin') {
       throw new Error('Access denied')
     }
 

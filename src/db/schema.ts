@@ -4,36 +4,119 @@ import {
   boolean,
   timestamp,
   integer,
-  pgEnum,
   index,
 } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createId } from '@paralleldrive/cuid2'
 
-// Enums
-export const userRoleEnum = pgEnum('UserRole', ['USER', 'ADMIN'])
+// Better Auth core tables
 
-// Tables
-export const users = pgTable('User', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => createId()),
+export const user = pgTable('user', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  password: text('password').notNull(),
-  role: userRoleEnum('role').default('USER').notNull(),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt')
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  // Admin plugin fields
+  role: text('role').default('user'),
+  banned: boolean('banned').default(false),
+  banReason: text('ban_reason'),
+  banExpires: timestamp('ban_expires'),
 })
+
+export const session = pgTable(
+  'session',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    expiresAt: timestamp('expires_at').notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    // Admin plugin fields
+    impersonatedBy: text('impersonated_by'),
+  },
+  (table) => [index('session_userId_idx').on(table.userId)]
+)
+
+export const account = pgTable(
+  'account',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at'),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+    scope: text('scope'),
+    idToken: text('id_token'),
+    password: text('password'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('account_userId_idx').on(table.userId)]
+)
+
+export const verification = pgTable(
+  'verification',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('verification_identifier_idx').on(table.identifier)]
+)
+
+// API Key plugin table
+
+export const apikey = pgTable(
+  'apikey',
+  {
+    id: text('id').primaryKey(),
+    name: text('name'),
+    start: text('start'),
+    prefix: text('prefix'),
+    key: text('key').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    refillInterval: integer('refill_interval'),
+    refillAmount: integer('refill_amount'),
+    lastRefillAt: timestamp('last_refill_at'),
+    enabled: boolean('enabled').notNull().default(true),
+    rateLimitEnabled: boolean('rate_limit_enabled').notNull().default(false),
+    rateLimitTimeWindow: integer('rate_limit_time_window'),
+    rateLimitMax: integer('rate_limit_max'),
+    requestCount: integer('request_count').notNull().default(0),
+    remaining: integer('remaining'),
+    lastRequest: timestamp('last_request'),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    permissions: text('permissions'),
+    metadata: text('metadata'),
+  },
+  (table) => [index('apikey_userId_idx').on(table.userId)]
+)
+
+// Application tables
 
 export const documents = pgTable(
   'Document',
   {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => createId()),
+    id: text('id').primaryKey(),
     title: text('title').notNull(),
     fileKey: text('fileKey'),
     fileName: text('fileName'),
@@ -41,7 +124,7 @@ export const documents = pgTable(
     fileSize: integer('fileSize'),
     userId: text('userId')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
     updatedAt: timestamp('updatedAt')
       .defaultNow()
@@ -51,38 +134,27 @@ export const documents = pgTable(
   (table) => [index('Document_userId_idx').on(table.userId)]
 )
 
-export const userApiKeys = pgTable(
-  'UserApiKey',
-  {
-    id: text('id')
-      .primaryKey()
-      .$defaultFn(() => createId()),
-    userId: text('userId')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    hashedKey: text('hashedKey').unique(),
-    prefix: text('prefix'),
-    createdAt: timestamp('createdAt').defaultNow().notNull(),
-    lastUsedAt: timestamp('lastUsedAt'),
-    revoked: boolean('revoked').default(false).notNull(),
-  },
-  (table) => [
-    index('UserApiKey_userId_idx').on(table.userId),
-    index('UserApiKey_hashedKey_idx').on(table.hashedKey),
-  ]
-)
-
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+
+export const userRelations = relations(user, ({ many }) => ({
+  sessions: many(session),
+  accounts: many(account),
+  apikeys: many(apikey),
   documents: many(documents),
-  apiKeys: many(userApiKeys),
+}))
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, { fields: [session.userId], references: [user.id] }),
+}))
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, { fields: [account.userId], references: [user.id] }),
+}))
+
+export const apikeyRelations = relations(apikey, ({ one }) => ({
+  user: one(user, { fields: [apikey.userId], references: [user.id] }),
 }))
 
 export const documentsRelations = relations(documents, ({ one }) => ({
-  user: one(users, { fields: [documents.userId], references: [users.id] }),
-}))
-
-export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
-  user: one(users, { fields: [userApiKeys.userId], references: [users.id] }),
+  user: one(user, { fields: [documents.userId], references: [user.id] }),
 }))

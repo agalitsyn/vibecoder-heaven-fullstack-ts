@@ -13,10 +13,12 @@ export const Route = createFileRoute('/_authed/admin/users/$userId')({
 })
 
 function AdminEditUserPage() {
-  const user = Route.useLoaderData()
+  const userData = Route.useLoaderData()
   const router = useRouter()
-  const [email, setEmail] = useState(user.email)
-  const [role, setRole] = useState<'USER' | 'ADMIN'>(user.role)
+  const [email, setEmail] = useState(userData.email)
+  const [role, setRole] = useState<'user' | 'admin'>(
+    (userData.role as 'user' | 'admin') || 'user'
+  )
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -28,10 +30,10 @@ function AdminEditUserPage() {
     setSaving(true)
 
     try {
-      const data: { userId: string; email?: string; role?: 'USER' | 'ADMIN'; password?: string } =
-        { userId: user.id }
-      if (email !== user.email) data.email = email
-      if (role !== user.role) data.role = role
+      const data: { userId: string; email?: string; role?: 'user' | 'admin'; password?: string } =
+        { userId: userData.id }
+      if (email !== userData.email) data.email = email
+      if (role !== userData.role) data.role = role
       if (newPassword) data.password = newPassword
 
       await adminUpdateUser({ data })
@@ -46,7 +48,7 @@ function AdminEditUserPage() {
 
   async function handleDelete() {
     try {
-      await adminDeleteUser({ data: { userId: user.id } })
+      await adminDeleteUser({ data: { userId: userData.id } })
       router.navigate({ to: '/admin/users' })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete user')
@@ -85,11 +87,11 @@ function AdminEditUserPage() {
               <select
                 id="role"
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'USER' | 'ADMIN')}
+                onChange={(e) => setRole(e.target.value as 'user' | 'admin')}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="USER">User</option>
-                <option value="ADMIN">Admin</option>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
             <div className="space-y-2">

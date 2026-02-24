@@ -1,11 +1,11 @@
 import { redirect, createFileRoute } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
-import { useAppSession } from '~/utils/session'
+import { getRequestHeaders } from '@tanstack/react-start/server'
+import { auth } from '~/lib/auth'
 
 const logoutFn = createServerFn().handler(async () => {
-  const session = await useAppSession()
-
-  session.clear()
+  const headers = getRequestHeaders()
+  await auth.api.signOut({ headers })
 
   throw redirect({
     href: '/',

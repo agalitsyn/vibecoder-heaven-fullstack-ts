@@ -7,15 +7,12 @@ import {
   createRootRoute,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-import { createServerFn } from '@tanstack/react-start'
 import * as React from 'react'
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary.js'
 import { NotFound } from '~/components/NotFound.js'
 import appCss from '~/styles/app.css?url'
 import { seo } from '~/utils/seo.js'
-import { useAppSession } from '~/utils/session.js'
-import { db, users } from '~/db'
-import { eq } from 'drizzle-orm'
+import { getSession } from '~/lib/auth-session'
 import { Button } from '~/components/ui/button'
 import { Separator } from '~/components/ui/separator'
 import {
@@ -29,27 +26,12 @@ import {
 import { Avatar, AvatarFallback } from '~/components/ui/avatar'
 import { ThemeToggle } from '~/components/ThemeToggle'
 
-const fetchUser = createServerFn({ method: 'GET' }).handler(async () => {
-  const session = await useAppSession()
-
-  if (!session.data.userId) {
-    return null
-  }
-
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, session.data.userId),
-    columns: { id: true, email: true, role: true },
-  })
-
-  return user
-})
-
 export const Route = createRootRoute({
   beforeLoad: async () => {
-    const user = await fetchUser()
+    const session = await getSession()
 
     return {
-      user,
+      user: session?.user ?? null,
     }
   },
   head: () => ({
@@ -174,7 +156,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                         Profile
                       </Link>
                     </DropdownMenuItem>
-                    {user.role === 'ADMIN' && (
+                    {user.role === 'admin' && (
                       <>
                         <DropdownMenuItem asChild>
                           <Link to="/admin" className="cursor-pointer">

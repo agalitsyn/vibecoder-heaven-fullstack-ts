@@ -1,115 +1,116 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { eq, desc } from 'drizzle-orm'
-import { db, users, userApiKeys } from '~/db'
-import { useAppSession } from '~/utils/session'
+import { db, user, apikey } from '~/db'
+import { requireAuth } from '~/lib/auth-helpers'
+import { authClient } from '~/lib/auth-client'
 import { ProfilePage, type ProfileUser, type ApiKeyInfo } from '~/components/profile/ProfilePage'
-import {
-  createApiKey,
-  revokeApiKey,
-  deleteApiKey,
-} from '~/utils/api-keys'
 
 const fetchProfileUser = createServerFn({ method: 'GET' }).handler(
   async (): Promise<ProfileUser | null> => {
-    const session = await useAppSession()
-    const userId = session.data.userId
+    const { userId } = await requireAuth()
 
-    if (!userId) {
-      return null
-    }
-
-    const user = await db
+    const result = await db
       .select({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        createdAt: users.createdAt,
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
       })
-      .from(users)
-      .where(eq(users.id, userId))
+      .from(user)
+      .where(eq(user.id, userId))
       .limit(1)
 
-    if (user.length === 0) {
+    if (result.length === 0) {
       return null
     }
 
-    return user[0]
+    return result[0]
   }
 )
 
 const fetchApiKeys = createServerFn({ method: 'GET' }).handler(
   async (): Promise<ApiKeyInfo[]> => {
-    const session = await useAppSession()
-    const userId = session.data.userId
-
-    if (!userId) {
-      return []
-    }
+    const { userId } = await requireAuth()
 
     return db
       .select({
-        id: userApiKeys.id,
-        title: userApiKeys.title,
-        prefix: userApiKeys.prefix,
-        createdAt: userApiKeys.createdAt,
-        lastUsedAt: userApiKeys.lastUsedAt,
-        revoked: userApiKeys.revoked,
+        id: apikey.id,
+        name: apikey.name,
+        prefix: apikey.prefix,
+        start: apikey.start,
+        createdAt: apikey.createdAt,
+        expiresAt: apikey.expiresAt,
+        enabled: apikey.enabled,
       })
-      .from(userApiKeys)
-      .where(eq(userApiKeys.userId, userId))
-      .orderBy(desc(userApiKeys.createdAt))
+      .from(apikey)
+      .where(eq(apikey.userId, userId))
+      .orderBy(desc(apikey.createdAt))
   }
 )
 
 export const Route = createFileRoute('/_authed/profile')({
   loader: async () => {
-    const user = await fetchProfileUser()
-    if (!user) {
+    const profileUser = await fetchProfileUser()
+    if (!profileUser) {
       throw new Error('User not found')
     }
 
     const apiKeys = await fetchApiKeys()
 
-    return { user, apiKeys }
+    return { user: profileUser, apiKeys }
   },
   component: ProfilePageRoute,
 })
 
 function ProfilePageRoute() {
-  const { user, apiKeys } = Route.useLoaderData()
+  const { user: profileUser, apiKeys } = Route.useLoaderData()
   const router = useRouter()
 
-  const handleCreateKey = async (title: string) => {
-    const result = await createApiKey({ data: { title } })
-    if (result.success) {
-      router.invalidate()
-    }
-    return result
-  }
+  const handleCreateKey = async (name: string) => {
+    const { data, error } = await authClient.apiKey.create({
+      name,
+      prefix: 'sk',
+      expiresIn: undefined, // no expiration
+    })
 
-  const handleRevokeKey = async (keyId: string) => {
-    const result = await revokeApiKey({ data: { keyId } })
-    if (result.success) {
-      router.invalidate()
+    if (error || !data) {
+      return { success: false, error: error?.message || 'Failed to create key' }
     }
-    return result
+
+    router.invalidate()
+    return {
+      success: true,
+      key: data.key,
+      keyInfo: {
+        id: data.id,
+        name: data.name,
+        prefix: data.prefix,
+        start: data.start,
+        createdAt: data.createdAt,
+        expiresAt: data.expiresAt,
+        enabled: data.enabled,
+      },
+    }
   }
 
   const handleDeleteKey = async (keyId: string) => {
-    const result = await deleteApiKey({ data: { keyId } })
-    if (result.success) {
-      router.invalidate()
+    const { error } = await authClient.apiKey.delete({ keyId })
+
+    if (error) {
+      return { success: false, error: error.message || 'Failed to delete key' }
     }
-    return result
+
+    router.invalidate()
+    return { success: true }
   }
 
   return (
     <ProfilePage
-      user={user}
+      user={profileUser}
       apiKeys={apiKeys}
       onCreateKey={handleCreateKey}
-      onRevokeKey={handleRevokeKey}
       onDeleteKey={handleDeleteKey}
     />
   )

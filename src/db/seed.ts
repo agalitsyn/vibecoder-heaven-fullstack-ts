@@ -1,87 +1,67 @@
-import 'dotenv/config'
-import { db, hashPassword } from './index'
-import * as schema from './schema'
-import { createId } from '@paralleldrive/cuid2'
+import "dotenv/config";
+import { db } from "./index";
+import * as schema from "./schema";
+import { auth } from "../lib/auth";
+import { createId } from "@paralleldrive/cuid2";
 
 async function main() {
-  const hashedPassword = await hashPassword('password123')
-
   // Clear existing data
-  await db.delete(schema.documents)
-  await db.delete(schema.userApiKeys)
-  await db.delete(schema.users)
+  await db.delete(schema.documents);
+  await db.delete(schema.apikey);
+  await db.delete(schema.session);
+  await db.delete(schema.account);
+  await db.delete(schema.user);
 
-  // Create users
-  const now = new Date()
-  const users = await db
-    .insert(schema.users)
-    .values([
-      {
-        id: createId(),
-        email: 'user@example.com',
-        password: hashedPassword,
-        role: 'USER' as const,
-        updatedAt: now,
-      },
-      {
-        id: createId(),
-        email: 'admin@example.com',
-        password: hashedPassword,
-        role: 'ADMIN' as const,
-        updatedAt: now,
-      },
-    ])
-    .returning()
+  // Create users via Better Auth API (handles password hashing)
+  const userResult = await auth.api.signUpEmail({
+    body: {
+      email: "user@example.com",
+      password: "useruser",
+      name: "User",
+    },
+  });
 
-  console.log(`Created ${users.length} users`)
+  if (!userResult?.user) {
+    throw new Error("Failed to create seed user");
+  }
+
+  console.log("Created 1 user");
 
   // Create sample documents
+  const now = new Date();
   const documents = await db
     .insert(schema.documents)
     .values([
       {
         id: createId(),
-        title: 'Getting Started Guide',
-        userId: users[0].id,
+        title: "Getting Started Guide",
+        userId: userResult.user.id,
         updatedAt: now,
       },
       {
         id: createId(),
-        title: 'Project Roadmap',
-        userId: users[0].id,
+        title: "Project Roadmap",
+        userId: userResult.user.id,
         updatedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
       },
       {
         id: createId(),
-        title: 'Architecture Overview',
-        userId: users[0].id,
+        title: "Architecture Overview",
+        userId: userResult.user.id,
         updatedAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
       },
-      {
-        id: createId(),
-        title: 'Admin Notes',
-        userId: users[1].id,
-        updatedAt: now,
-      },
-      {
-        id: createId(),
-        title: 'Deployment Checklist',
-        userId: users[1].id,
-        updatedAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000),
-      },
     ])
-    .returning()
+    .returning();
 
-  console.log(`Created ${documents.length} documents`)
+  console.log(`Created ${documents.length} documents`);
 
-  console.log('Seed completed!')
-  console.log('Test users:')
-  console.log('  user@example.com / password123 (USER)')
-  console.log('  admin@example.com / password123 (ADMIN)')
-  process.exit(0)
+  console.log("Seed completed!");
+  console.log("Test user:");
+  console.log("  user@example.com / useruser (user)");
+  process.exit(0);
 }
 
 main().catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+  console.error(e);
+  process.exit(1);
+});

@@ -15,12 +15,19 @@ Start infrastructure (PostgreSQL + MinIO):
 pnpm dev-infra
 ```
 
-Apply database schema and seed test data:
+Apply database schema and seed admin user:
 
 ```sh
 pnpm db:push
 pnpm db:seed
 ```
+
+| Email              | Password      | Role  |
+|--------------------|---------------|-------|
+| admin@example.com  | adminadmin    | admin |
+
+Admin users have access to the admin panel at `/admin`.
+
 
 Start the dev server:
 
@@ -32,14 +39,7 @@ App runs at http://localhost:3000
 
 ## Test Users
 
-After running `pnpm db:seed`:
-
-| Email              | Password      | Role  |
-|--------------------|---------------|-------|
-| user@example.com   | password123   | USER  |
-| admin@example.com  | password123   | ADMIN |
-
-Admin users have access to the admin panel at `/admin`.
+Run `pnpm db:seed:testdata`:
 
 ## Build
 

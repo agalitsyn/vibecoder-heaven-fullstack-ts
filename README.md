@@ -5,7 +5,7 @@ A production-ready starter template with authentication, file storage, API keys,
 ## Getting Started
 
 ```sh
-cp .env.example .env
+cp apps/web/.env.example apps/web/.env
 pnpm install
 ```
 
